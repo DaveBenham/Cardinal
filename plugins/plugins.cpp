@@ -106,6 +106,8 @@ extern Model* modelBlank;
 */
 #define modelChord modelAutinnChord
 #define modelVibrato modelAutinnVibrato
+#define modelSnare modelAutinnSnare
+#define modelScope modelAutinnScope
 extern Model* modelJette;
 extern Model* modelFlora;
 extern Model* modelOxcart;
@@ -130,8 +132,17 @@ extern Model* modelFil;
 extern Model* modelNap;
 extern Model* modelMelody;
 extern Model* modelChord;
+extern Model* modelKicker;
+extern Model* modelSnare;
+extern Model* modelCoil;
+extern Model* modelGeiger;
+extern Model* modelSaw2;
+extern Model *modelScope;
+extern Model *modelExcavi;
 #undef modelChord
 #undef modelVibrato
+#undef modelSnare
+#undef modelScope
 
 // Axioma
 #include "Axioma/src/plugin.hpp"
@@ -921,8 +932,10 @@ void setupSamples();
 #define ZZC_SHARED_H
 #define ZZC_WIDGETS_H
 #define modelClock modelZZCClock
+#define LedLight ZZCLedLight
 #include "ZZC/src/ZZC.hpp"
 #undef modelClock
+#undef LedLight
 
 // known terminal modules
 std::vector<Model*> hostTerminalModels;
@@ -1069,10 +1082,17 @@ struct StaticPluginLoader {
             return;
         }
 
-        // force ABI, we use static plugins so this doesnt matter as long as it builds
-        json_t* const version = json_string((APP_VERSION_MAJOR + ".0").c_str());
-        json_object_set(rootJ, "version", version);
-        json_decref(version);
+        std::string version;
+        if (json_t* const versionJ = json_object_get(rootJ, "version"))
+            version = json_string_value(versionJ);
+
+        if (!string::startsWith(version, APP_VERSION_MAJOR + "."))
+        {
+            // force ABI, we use static plugins so this doesnt matter as long as it builds
+            json_t* const versionJ = json_string((APP_VERSION_MAJOR + ".0").c_str());
+            json_object_set(rootJ, "version", versionJ);
+            json_decref(versionJ);
+        }
 
         // Load manifest
         p->fromJson(rootJ);
@@ -1157,12 +1177,12 @@ static void initStatic__Cardinal()
        #else
         spl.removeModule("glBars");
        #endif
-       #ifndef __MOD_DEVICES__
+       #ifndef STATIC_BUILD
         p->addModel(modelAudioFile);
        #else
         spl.removeModule("AudioFile");
        #endif
-       #if !(defined(DISTRHO_OS_WASM) || defined(__MOD_DEVICES__))
+       #if !(defined(DISTRHO_OS_WASM) || defined(STATIC_BUILD))
         p->addModel(modelCarla);
         p->addModel(modelIldaeil);
        #else
@@ -1547,6 +1567,8 @@ static void initStatic__Autinn()
     {
 #define modelChord modelAutinnChord
 #define modelVibrato modelAutinnVibrato
+#define modelSnare modelAutinnSnare
+#define modelScope modelAutinnScope
         p->addModel(modelAmp);
         p->addModel(modelDeadband);
         p->addModel(modelBass);
@@ -1571,8 +1593,17 @@ static void initStatic__Autinn()
         p->addModel(modelNap);
         p->addModel(modelMelody);
         p->addModel(modelChord);
+        p->addModel(modelKicker);
+	    p->addModel(modelSnare);
+	    p->addModel(modelCoil);
+	    p->addModel(modelGeiger);
+	    p->addModel(modelSaw2);
+        p->addModel(modelScope);
+        p->addModel(modelExcavi);
 #undef modelChord
 #undef modelVibrato
+#undef modelSnare
+#undef modelScope
     }
 }
 
@@ -2588,13 +2619,24 @@ static void initStatic__JW()
         p->addModel(modelWavHead);
         p->addModel(modelXYPad);
         p->addModel(modelBlankPanel1hp);
+        p->addModel(modelBlankPanel2hp);
+        p->addModel(modelBlankPanel4hp);
         p->addModel(modelBlankPanelSmall);
         p->addModel(modelBlankPanelMedium);
         p->addModel(modelBlankPanelLarge);
         p->addModel(modelCoolBreeze);
         p->addModel(modelPete);
         p->addModel(modelTimer);
-       #ifndef __MOD_DEVICES__
+        p->addModel(modelSubtract5);
+        p->addModel(modelGrains);
+        p->addModel(modelSampleGrid);
+        p->addModel(modelBuffer);
+        p->addModel(modelRandomSound);
+        p->addModel(modelShiftRegRnd);
+        p->addModel(modelStereoSwitch);
+        p->addModel(modelStereoSwitchInv);
+        p->addModel(modelArrange16);
+       #ifndef STATIC_BUILD 
         p->addModel(modelStr1ker);
        #else
         spl.removeModule("Str1ker");
@@ -3218,6 +3260,9 @@ static void initStatic__Sapphire()
         p->addModel(modelSapphireEchoOut);
         p->addModel(modelSapphireEchoTap);
         p->addModel(modelSapphireElastika);
+        p->addModel(modelSapphireEmpathInput);
+        p->addModel(modelSapphireEmpathFilter);
+        p->addModel(modelSapphireEmpathOutput);
         p->addModel(modelSapphireEnv);
         p->addModel(modelSapphireFrolic);
         p->addModel(modelSapphireGalaxy);
@@ -3676,6 +3721,7 @@ static void initStatic__ZZC()
         p->addModel(modelDiv);
         p->addModel(modelDivExp);
         p->addModel(modelPolygate);
+        p->addModel(modelPhaseque);
 #undef modelClock
     }
 }

@@ -255,7 +255,7 @@ PLUGIN_FILES += Cardinal/src/glBars.cpp
 endif
 endif
 
-ifneq ($(MOD_BUILD),true)
+ifneq ($(STATIC_BUILD),true)
 PLUGIN_FILES += Cardinal/src/AudioFile.cpp
 ifneq ($(WASM),true)
 PLUGIN_FILES += Cardinal/src/Carla.cpp
@@ -531,7 +531,8 @@ MINIPLUGIN_FILES += AudibleInstruments/eurorack/stmlib/utils/random.cc
 
 PLUGIN_FILES += $(wildcard Autinn/src/*.cpp)
 
-AUTINN_CUSTOM = Chord Vibrato
+AUTINN_CUSTOM = Chord Vibrato Snare Scope ScopeDisplay DCBlocker
+AUTINN_CUSTOM_PER_FILE = AutoLevelMenuItem
 
 # --------------------------------------------------------------
 # Axioma
@@ -1346,11 +1347,13 @@ PLUGIN_FILES += $(filter-out ZetaCarinaeModules/src/plugin.cpp,$(wildcard ZetaCa
 # ZZC
 
 PLUGIN_FILES += $(filter-out ZZC/src/ZZC.cpp ZZC/src/WavetablePlayer.cpp,$(wildcard ZZC/src/*.cpp))
+PLUGIN_FILES += $(wildcard ZZC/src/Phaseque/*.cpp)
 # PLUGIN_FILES += ZZC/src/dsp/Wavetable.cpp
 # PLUGIN_FILES += ZZC/src/filetypes/WavSupport.cpp
 
 # modules/types which are present in other plugins
-ZZC_CUSTOM = Clock LowFrequencyOscillator
+ZZC_CUSTOM = Clock LowFrequencyOscillator LedLight Step PolyModeValueItem PolyModeItem
+ZZC_CUSTOM_PER_FILE = ExternalCVModeCompatibleOptionItem ExternalCVModeVBPSOptionItem SnapCVOptionItem ExternalCVModeItem
 
 # --------------------------------------------------------------
 # Build setup
@@ -1846,7 +1849,7 @@ LV2_RESOURCES += $(PLUGIN_LIST:%=../bin/CardinalFX.lv2/resources/PluginManifests
 LV2_RESOURCES += $(RESOURCE_FILES:%=../bin/Cardinal.lv2/resources/%)
 LV2_RESOURCES += $(RESOURCE_FILES:%=../bin/CardinalFX.lv2/resources/%)
 
-# MOD builds only have LV2 FX variant for now
+# wasm builds only have standalone and mini
 else ifeq ($(WASM),true)
 
 MINI_RESOURCES  = $(MINIPLUGIN_LIST:%=../bin/CardinalMini.lv2/resources/PluginManifests/%.json)
@@ -1896,7 +1899,12 @@ VST3_RESOURCES += $(RESOURCE_FILES:%=../bin/CardinalSynth.vst3/Contents/Resource
 
 endif
 
+LOADER_RESOURCES  = $(PLUGIN_LIST:%=../bin/CardinalLoader.lv2/resources/PluginManifests/%.json)
+LOADER_RESOURCES += $(RESOURCE_FILES:%=../bin/CardinalLoader.lv2/resources/%)
+
 resources: $(JACK_RESOURCES) $(LV2_RESOURCES) $(VST2_RESOURCES) $(VST3_RESOURCES) $(CLAP_RESOURCES)
+
+loader-resources: $(LOADER_RESOURCES)
 
 mini-resources: $(MINI_RESOURCES)
 
@@ -1905,6 +1913,10 @@ mini-resources: $(MINI_RESOURCES)
 	$(SILENT)ln -sf $(abspath $<) $@
 
 ../bin/CardinalFX.lv2/resources/%: %
+	-@mkdir -p "$(shell dirname $@)"
+	$(SILENT)ln -sf $(abspath $<) $@
+
+../bin/CardinalLoader.lv2/resources/%: %
 	-@mkdir -p "$(shell dirname $@)"
 	$(SILENT)ln -sf $(abspath $<) $@
 
@@ -1934,11 +1946,19 @@ ifeq ($(MOD_BUILD),true)
 	$(SILENT)python3 ../deps/svg2stub.py $< $@
 endif
 
+../bin/CardinalLoader.lv2/resources/%.svg: %.svg ../deps/svg2stub.py
+	-@mkdir -p "$(shell dirname $@)"
+	$(SILENT)python3 ../deps/svg2stub.py $< $@
+
 ../bin/Cardinal.lv2/resources/PluginManifests/%.json: %/plugin.json
 	-@mkdir -p "$(shell dirname $@)"
 	$(SILENT)ln -sf $(abspath $<) $@
 
 ../bin/CardinalFX.lv2/resources/PluginManifests/%.json: %/plugin.json
+	-@mkdir -p "$(shell dirname $@)"
+	$(SILENT)ln -sf $(abspath $<) $@
+
+../bin/CardinalLoader.lv2/resources/PluginManifests/%.json: %/plugin.json
 	-@mkdir -p "$(shell dirname $@)"
 	$(SILENT)ln -sf $(abspath $<) $@
 
@@ -2229,6 +2249,7 @@ $(BUILD_DIR)/Autinn/%.cpp.o: Autinn/%.cpp
 	@echo "Compiling $<"
 	$(SILENT)$(CXX) $< $(BUILD_CXX_FLAGS) -c -o $@ \
 		$(foreach m,$(AUTINN_CUSTOM),$(call custom_module_names,$(m),Autinn)) \
+		$(foreach m,$(AUTINN_CUSTOM_PER_FILE),$(call custom_per_file_names,$(m),autinn_$(shell basename -- $*))) \
 		-DpluginInstance=pluginInstance__Autinn \
 		-Dinit=init__Autinn
 
@@ -2873,6 +2894,7 @@ $(BUILD_DIR)/ZZC/%.cpp.o: ZZC/%.cpp
 	@echo "Compiling $<"
 	$(SILENT)$(CXX) $< $(BUILD_CXX_FLAGS) -c -o $@ \
 		$(foreach m,$(ZZC_CUSTOM),$(call custom_module_names,$(m),ZZC)) \
+		$(foreach m,$(ZZC_CUSTOM_PER_FILE),$(call custom_per_file_names,$(m),ZZC_$(shell basename -- $*))) \
 		-DpluginInstance=pluginInstance__ZZC
 
 # --------------------------------------------------------------

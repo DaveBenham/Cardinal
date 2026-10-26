@@ -3,7 +3,7 @@ name: build
 on: [push, pull_request]
 
 env:
-  CACHE_VERSION: 13
+  CACHE_VERSION: 15
   CARDINAL_UNDER_WINE: 1
   CIBUILD: true
   DEBIAN_FRONTEND: noninteractive
@@ -54,6 +54,21 @@ jobs:
       - name: Setup dependencies
         shell: bash
         run: |
+          # workaround for ncurses riscv64 build failure
+          if [[ "${{ matrix.target }}" = "riscv64" ]]; then
+              echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse" | tee -a /etc/apt/sources.list
+              echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse" | tee -a /etc/apt/sources.list
+              echo "deb [arch=riscv64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse" | tee -a /etc/apt/sources.list
+              apt-get update -qq
+              apt-get purge -yqq libncurses-dev
+              apt-get install -yqq wget
+              wget \
+                  http://kx.studio/tmp/libtinfo6_6.3-2ubuntu0.1_amd64.deb \
+                  http://kx.studio/tmp/libncurses6_6.3-2ubuntu0.1_amd64.deb \
+                  http://kx.studio/tmp/libncursesw6_6.3-2ubuntu0.1_amd64.deb \
+                  && dpkg -i *.deb && rm *.deb
+              apt-get install -yqq libtinfo6:riscv64
+          fi
           ./deps/PawPaw/.github/workflows/bootstrap-deps.sh linux-${{ matrix.target }}
           apt-get install -yqq wget zip
       - name: Setup dependencies (aarch64)
@@ -158,7 +173,7 @@ jobs:
             *.tar.xz
 
   macos:
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
         with:
@@ -202,6 +217,13 @@ jobs:
       - name: Build macOS (packaging)
         if: steps.cache.outputs.cache-hit == 'true'
         shell: bash
+        env:
+          MACOS_APP_CERTIFICATE: ${{ secrets.MACOS_APP_CERTIFICATE }}
+          MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_NOTARIZATION_USER: ${{ secrets.MACOS_NOTARIZATION_USER }}
+          MACOS_NOTARIZATION_PASS: ${{ secrets.MACOS_NOTARIZATION_PASS }}
+          MACOS_NOTARIZATION_TEAM: ${{ secrets.MACOS_NOTARIZATION_TEAM }}
         run: |
           source deps/PawPaw/local.env macos-universal-10.15
           ./utils/create-macos-installer.sh

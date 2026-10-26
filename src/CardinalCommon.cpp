@@ -1,6 +1,6 @@
 /*
  * DISTRHO Cardinal Plugin
- * Copyright (C) 2021-2025 Filipe Coelho <falktx@falktx.com>
+ * Copyright (C) 2021-2026 Filipe Coelho <falktx@falktx.com>
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -36,7 +36,7 @@
 # error wrong build
 #endif
 
-#if (defined(STATIC_BUILD) && !defined(__MOD_DEVICES__)) || CARDINAL_VARIANT_MINI
+#if (defined(STATIC_BUILD) && !defined(__MOD_DEVICES__)) || CARDINAL_VARIANT_LOADER || CARDINAL_VARIANT_MINI
 # undef CARDINAL_INIT_OSC_THREAD
 #endif
 
@@ -70,6 +70,8 @@
 
 #if CARDINAL_VARIANT_FX
 # define CARDINAL_VARIANT_NAME "fx"
+#elif CARDINAL_VARIANT_LOADER
+# define CARDINAL_VARIANT_NAME "loader"
 #elif CARDINAL_VARIANT_MINI
 # define CARDINAL_VARIANT_NAME "mini"
 #elif CARDINAL_VARIANT_NATIVE
@@ -99,7 +101,7 @@ void destroyStaticPlugins();
 }
 }
 
-const std::string CARDINAL_VERSION = "25.10";
+const std::string CARDINAL_VERSION = "26.02";
 
 // -----------------------------------------------------------------------------------------------------------
 
@@ -125,22 +127,26 @@ void handleHostParameterDrag(const CardinalPluginContext* pcontext, uint index, 
 // --------------------------------------------------------------------------------------------------------------------
 
 CardinalPluginContext::CardinalPluginContext(Plugin* const p)
-    : bufferSize(p != nullptr ? p->getBufferSize() : 0),
+   #if CARDINAL_VARIANT_FX
+    : variant(kCardinalVariantFX),
+   #elif CARDINAL_VARIANT_LOADER
+    : variant(kCardinalVariantLoader),
+   #elif CARDINAL_VARIANT_MAIN
+    : variant(kCardinalVariantMain),
+   #elif CARDINAL_VARIANT_MINI
+    : variant(kCardinalVariantMini),
+   #elif CARDINAL_VARIANT_NATIVE
+    : variant(kCardinalVariantNative),
+   #elif CARDINAL_VARIANT_SYNTH
+    : variant(kCardinalVariantSynth),
+   #else
+    #error cardinal variant not set
+   #endif
+      parameterCount(CARDINAL_NUM_PARAMETERS),
+      parameters(new float[CARDINAL_NUM_PARAMETERS]),
+      bufferSize(p != nullptr ? p->getBufferSize() : 0),
       processCounter(0),
       sampleRate(p != nullptr ? p->getSampleRate() : 0.0),
-     #if CARDINAL_VARIANT_MAIN
-      variant(kCardinalVariantMain),
-     #elif CARDINAL_VARIANT_MINI
-      variant(kCardinalVariantMini),
-     #elif CARDINAL_VARIANT_FX
-      variant(kCardinalVariantFX),
-     #elif CARDINAL_VARIANT_NATIVE
-      variant(kCardinalVariantNative),
-     #elif CARDINAL_VARIANT_SYNTH
-      variant(kCardinalVariantSynth),
-     #else
-      #error cardinal variant not set
-     #endif
       bypassed(false),
       playing(false),
       reset(false),
@@ -166,7 +172,7 @@ CardinalPluginContext::CardinalPluginContext(Plugin* const p)
       tlw(nullptr),
       ui(nullptr)
 {
-    std::memset(parameters, 0, sizeof(parameters));
+    std::memset(parameters, 0, sizeof(float) * CARDINAL_NUM_PARAMETERS);
 }
 
 bool CardinalPluginContext::addIdleCallback(IdleCallback* const cb) const
@@ -630,12 +636,14 @@ Initializer::Initializer(const CardinalBasePlugin* const plugin, const CardinalB
 
         if (isRealInstance)
         {
-            system::createDirectory(asset::userDir);
            #if defined(DISTRHO_OS_WASM) && !defined(CARDINAL_COMMON_UI_ONLY)
             EM_ASM({
+                Module.FS.mkdir('/userfiles');
                 Module.FS.mount(Module.IDBFS, {}, '/userfiles');
                 Module.FS.syncfs(true, function(err) { if (!err) { dynCall('vi', $0, [$1]) } });
             }, WebBrowserDataLoaded, this);
+           #else
+            system::createDirectory(asset::userDir);
            #endif
         }
     }
